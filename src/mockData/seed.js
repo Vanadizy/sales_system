@@ -20,6 +20,7 @@ export const createSeedData = () => ({
     { id: 'acc-system', fullName: 'Platform Administrator', email: 'admin@salesmanagement.app', password: 'Admin123!', avatar: '', status: 'Active', systemAdmin: true },
     { id: 'acc-emmanuel', fullName: 'Emmanuel Charles', email: 'emmanuel@axis.co.tz', password: 'Demo123!', avatar: '', status: 'Active' },
     { id: 'acc-neema', fullName: 'Neema Joseph', email: 'cashier@axis.co.tz', password: 'Demo123!', avatar: '', status: 'Active' },
+    { id: 'acc-finance', fullName: 'Grace Mhando', email: 'finance@axis.co.tz', password: 'Finance123!', avatar: '', status: 'Active' },
     { id: 'acc-founder', fullName: 'New Business Owner', email: 'founder@new.co.tz', password: 'Start123!', avatar: '', status: 'Active' },
   ],
   users: [
@@ -27,6 +28,7 @@ export const createSeedData = () => ({
     { id: 'usr-em-axis', accountId: 'acc-emmanuel', companyId: c1, branchIds: [b1, b2], role: 'Company Admin', permissions: ALL_PERMISSIONS, status: 'Active' },
     { id: 'usr-em-sav', accountId: 'acc-emmanuel', companyId: c2, branchIds: [b3], role: 'Cashier', permissions: CASHIER_PERMISSIONS, status: 'Active' },
     { id: 'usr-neema', accountId: 'acc-neema', companyId: c1, branchIds: [b2], role: 'Cashier', permissions: CASHIER_PERMISSIONS, status: 'Active' },
+    { id: 'usr-finance', accountId: 'acc-finance', companyId: c1, branchIds: [b1], role: 'Accountant', permissions: ACCOUNTANT_PERMISSIONS, status: 'Active' },
   ],
   roles: [c1, c2].flatMap((companyId) => ROLES.map((name) => ({ id: `${companyId}-${name.toLowerCase().replaceAll(' ', '-')}`, companyId, name }))),
   products: [
@@ -59,11 +61,12 @@ export const createSeedData = () => ({
   ],
   sales: [
     ...scoped(c1, b1, [
-      { id: 'sale1', invoice: 'INV-00431', date: '2026-05-27T08:13:00.000Z', customer: 'Walk-in Customer', total: 109400, payment: 'Cash', status: 'Paid', items: [{ productId: 'p1', name: 'Premium Rice 5kg', qty: 2, price: 18500 }, { productId: 'p2', name: 'Sunflower Oil 3L', qty: 4, price: 16200 }] },
-      { id: 'sale2', invoice: 'INV-00430', date: '2026-05-26T12:30:00.000Z', customer: 'Mlimani Cafe', total: 244800, payment: 'Mobile Money', status: 'Paid', items: [{ productId: 'p2', name: 'Sunflower Oil 3L', qty: 12, price: 16200 }] },
+      { id: 'sale5', invoice: 'INV-00432', date: '2026-05-27T09:10:00.000Z', customer: 'Walk-in Customer', subtotal: 90000, discount: 0, tax: 0, total: 90000, payment: 'Cash', status: 'Awaiting Payment', initiatedBy: 'Emmanuel Charles', items: [{ productId: 'p10', name: 'USB-C Fast Charger', qty: 2, price: 45000 }] },
+      { id: 'sale1', invoice: 'INV-00431', date: '2026-05-27T08:13:00.000Z', paidAt: '2026-05-27T08:16:00.000Z', customer: 'Walk-in Customer', subtotal: 101800, discount: 0, tax: 0, total: 101800, payment: 'Cash', status: 'Paid', receivedBy: 'Grace Mhando', items: [{ productId: 'p1', name: 'Premium Rice 5kg', qty: 2, price: 18500 }, { productId: 'p2', name: 'Sunflower Oil 3L', qty: 4, price: 16200 }] },
+      { id: 'sale2', invoice: 'INV-00430', date: '2026-05-26T12:30:00.000Z', paidAt: '2026-05-26T12:34:00.000Z', customer: 'Mlimani Cafe', subtotal: 194400, discount: 0, tax: 0, total: 194400, payment: 'Mobile Money', status: 'Paid', receivedBy: 'Grace Mhando', items: [{ productId: 'p2', name: 'Sunflower Oil 3L', qty: 12, price: 16200 }] },
     ]),
-    ...scoped(c1, b2, [{ id: 'sale3', invoice: 'INV-00228', date: '2026-05-27T07:44:00.000Z', customer: 'Kariakoo Guest', total: 71400, payment: 'Card', status: 'Paid', items: [{ productId: 'p5', name: 'Premium Rice 5kg', qty: 3, price: 18700 }] }]),
-    ...scoped(c2, b3, [{ id: 'sale4', invoice: 'INV-00091', date: '2026-05-27T09:00:00.000Z', customer: 'Dodoma Legal Partners', total: 326000, payment: 'Bank Transfer', status: 'Paid', items: [{ productId: 'p7', name: 'A4 Paper Box', qty: 2, price: 68000 }, { productId: 'p8', name: 'Ink Cartridge', qty: 2, price: 95000 }] }]),
+    ...scoped(c1, b2, [{ id: 'sale3', invoice: 'INV-00228', date: '2026-05-27T07:44:00.000Z', paidAt: '2026-05-27T07:48:00.000Z', customer: 'Kariakoo Guest', subtotal: 56100, discount: 0, tax: 0, total: 56100, payment: 'Card', status: 'Paid', receivedBy: 'Neema Joseph', items: [{ productId: 'p5', name: 'Premium Rice 5kg', qty: 3, price: 18700 }] }]),
+    ...scoped(c2, b3, [{ id: 'sale4', invoice: 'INV-00091', date: '2026-05-27T09:00:00.000Z', paidAt: '2026-05-27T09:03:00.000Z', customer: 'Dodoma Legal Partners', subtotal: 326000, discount: 0, tax: 0, total: 326000, payment: 'Bank Transfer', status: 'Paid', receivedBy: 'Emmanuel Charles', items: [{ productId: 'p7', name: 'A4 Paper Box', qty: 2, price: 68000 }, { productId: 'p8', name: 'Ink Cartridge', qty: 2, price: 95000 }] }]),
   ],
   inventory: [
     ...scoped(c1, b1, [{ id: 'iv1', date: now, productId: 'p1', product: 'Premium Rice 5kg', type: 'Stock In', quantity: 30, supplierId: 'su1', supplier: 'Tanzania Distribution Ltd', unitCost: 14300, cost: 429000, user: 'Emmanuel Charles' }]),
@@ -72,7 +75,7 @@ export const createSeedData = () => ({
   ],
   logs: [
     ...scoped(c1, b1, [{ id: 'log1', date: now, user: 'Emmanuel Charles', role: 'Company Admin', action: 'Inventory updated', module: 'Inventory', status: 'Success' }]),
-    ...scoped(c2, b3, [{ id: 'log2', date: now, user: 'Emmanuel Charles', role: 'Cashier', action: 'Sale completed', module: 'POS', status: 'Success' }]),
+    ...scoped(c2, b3, [{ id: 'log2', date: now, user: 'Emmanuel Charles', role: 'Accountant', action: 'Payment received: INV-00091', module: 'Finance', status: 'Success' }]),
   ],
   settings: [
     { id: 'set1', companyId: c1, currency: 'TZS', language: 'English', timezone: 'Africa/Dar_es_Salaam', theme: 'light', tax: 18 },

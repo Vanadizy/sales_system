@@ -9,6 +9,7 @@ import { ContextGuard, RequireAuth } from './ProtectedRoute'
 
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'))
 const POSPage = lazy(() => import('../pages/pos/POSPage'))
+const FinancePage = lazy(() => import('../pages/finance/FinancePage'))
 const ProductsPage = lazy(() => import('../pages/products/ProductsPage'))
 const InventoryPage = lazy(() => import('../pages/inventory/InventoryPage'))
 const CustomersPage = lazy(() => import('../pages/customers/CustomersPage'))
@@ -32,6 +33,7 @@ export default function App() {
       <Route path="/system-admin" element={<ContextGuard systemOnly><SystemAdminPage /></ContextGuard>} />
       <Route path="/dashboard" element={<ContextGuard permission="dashboard.view"><DashboardPage /></ContextGuard>} />
       <Route path="/pos" element={<ContextGuard permission="pos.use"><POSPage /></ContextGuard>} />
+      <Route path="/finance" element={<ContextGuard permission="finance.view"><FinancePage /></ContextGuard>} />
       <Route path="/products" element={<ContextGuard permission="products.view"><ProductsPage /></ContextGuard>} />
       <Route path="/inventory" element={<ContextGuard permission="inventory.view"><InventoryPage /></ContextGuard>} />
       <Route path="/customers" element={<ContextGuard permission="customers.view"><CustomersPage /></ContextGuard>} />

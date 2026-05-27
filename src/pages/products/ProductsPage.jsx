@@ -50,13 +50,13 @@ export default function ProductsPage() {
         const stock = spreadsheetNumber(row, 'stock', 'opening stock', 'quantity') ?? 0
         const reorder = spreadsheetNumber(row, 'reorder', 'reorder level', 'minimum stock') ?? 0
         if (!name || price == null || [price, cost, stock, reorder].some((number) => Number.isNaN(number) || number < 0)) {
-          errors.push(`row ${index + 2}`)
+          errors.push(`row ${row.__rowNumber || index + 2}`)
           return null
         }
         return {
           name,
           category: String(spreadsheetValue(row, 'category', 'product category')).trim() || 'General',
-          barcode: String(spreadsheetValue(row, 'barcode')).trim(),
+          barcode: String(spreadsheetValue(row, 'barcode', 'barcode optional')).trim(),
           price,
           cost,
           stock,

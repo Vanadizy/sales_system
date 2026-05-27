@@ -29,7 +29,7 @@ export default function InventoryPage() {
       const receipts = rows.map((row, index) => {
         const productCode = String(spreadsheetValue(row, 'product code', 'sku')).trim().toLowerCase()
         const productName = comparableText(spreadsheetValue(row, 'product name', 'product', 'name'))
-        const barcode = String(spreadsheetValue(row, 'barcode')).trim()
+        const barcode = String(spreadsheetValue(row, 'barcode', 'barcode optional')).trim()
         const identifierMatches = [
           productCode ? products.filter((item) => String(item.sku).toLowerCase() === productCode) : null,
           barcode ? products.filter((item) => item.barcode && item.barcode === barcode) : null,
@@ -45,7 +45,7 @@ export default function InventoryPage() {
         const quantity = spreadsheetNumber(row, 'quantity', 'quantity received', 'stock in')
         const unitCost = spreadsheetNumber(row, 'unit cost', 'cost', 'purchase cost')
         if (!product || !supplier || quantity == null || Number.isNaN(quantity) || quantity <= 0 || !Number.isInteger(quantity) || (unitCost != null && (Number.isNaN(unitCost) || unitCost < 0))) {
-          errors.push(`row ${index + 2}`)
+          errors.push(`row ${row.__rowNumber || index + 2}`)
           return null
         }
         const sourceDate = spreadsheetValue(row, 'date', 'received date')

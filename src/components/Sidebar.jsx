@@ -1,4 +1,4 @@
-import { BarChart3, Boxes, Building2, ClipboardList, LayoutDashboard, Package, Receipt, Settings, ShieldCheck, ShoppingCart, Store, Truck, Users, X } from 'lucide-react'
+import { Banknote, BarChart3, Boxes, Building2, ClipboardList, LayoutDashboard, Package, Receipt, Settings, ShieldCheck, ShoppingCart, Store, Truck, Users, X } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { Brand } from './UI'
@@ -6,6 +6,7 @@ import { Brand } from './UI'
 const items = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
   { to: '/pos', label: 'Point of Sale', icon: ShoppingCart, permission: 'pos.use' },
+  { to: '/finance', label: 'Finance & Payments', icon: Banknote, permission: 'finance.view' },
   { to: '/products', label: 'Products', icon: Package, permission: 'products.view' },
   { to: '/inventory', label: 'Inventory', icon: Boxes, permission: 'inventory.view' },
   { to: '/customers', label: 'Customers', icon: Users, permission: 'customers.view' },

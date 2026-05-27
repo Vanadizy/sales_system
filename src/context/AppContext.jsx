@@ -5,6 +5,7 @@ import { cleanText, comparableText, newId, nextCode } from '../utils/format'
 const STORE_KEY = 'axispos.prototype.v1'
 const SESSION_KEY = 'axispos.session.v1'
 const AppContext = createContext(null)
+const addPermissions = (permissions = [], additions = []) => [...new Set([...permissions, ...additions])]
 
 const read = (key, fallback) => {
   try {
@@ -15,18 +16,61 @@ const read = (key, fallback) => {
   }
 }
 
-const upgradeStoredData = (stored) => ({
-  ...stored,
-  accounts: stored.accounts.map((row) => row.systemAdmin && row.email === 'admin@axispos.app'
+const upgradeStoredData = (stored) => {
+  const accounts = stored.accounts.map((row) => row.systemAdmin && row.email === 'admin@axispos.app'
     ? { ...row, email: 'admin@salesmanagement.app' }
-    : row),
-  inventory: stored.inventory.map((row) => {
-    if (row.id === 'iv1') return { ...row, productId: 'p1', supplierId: 'su1', unitCost: 14300 }
-    if (row.id === 'iv2') return { ...row, product: 'Wireless Mouse', productId: 'p6', supplierId: 'su2', unitCost: 24000, cost: 360000 }
-    if (row.id === 'iv3') return { ...row, productId: 'p7', supplierId: 'su3', unitCost: 52000 }
-    return row
-  }),
-})
+    : row)
+  const users = stored.users.map((row) => ['Company Admin', 'Branch Manager', 'Accountant'].includes(row.role)
+    ? { ...row, permissions: addPermissions(row.permissions, ['finance.view', 'finance.receive']) }
+    : row)
+  const hasSampleCompany = stored.companies.some((row) => row.id === 'cmp-axis')
+  const financeAccount = accounts.find((row) => row.email === 'finance@axis.co.tz') || {
+    id: 'acc-finance',
+    fullName: 'Grace Mhando',
+    email: 'finance@axis.co.tz',
+    password: 'Finance123!',
+    avatar: '',
+    status: 'Active',
+  }
+
+  if (hasSampleCompany && !accounts.some((row) => row.email === financeAccount.email)) {
+    accounts.push(financeAccount)
+  }
+  if (
+    hasSampleCompany
+    && stored.branches.some((row) => row.id === 'br-axis-hq')
+    && !users.some((row) => row.accountId === financeAccount.id && row.companyId === 'cmp-axis')
+  ) {
+    users.push({
+      id: 'usr-finance',
+      accountId: financeAccount.id,
+      companyId: 'cmp-axis',
+      branchIds: ['br-axis-hq'],
+      role: 'Accountant',
+      permissions: roleDefaults.Accountant,
+      status: 'Active',
+    })
+  }
+
+  return {
+    ...stored,
+    accounts,
+    users,
+    sales: stored.sales.map((row) => {
+      if (row.id === 'sale1') return { ...row, subtotal: 101800, discount: 0, tax: 0, total: 101800, paidAt: row.paidAt || '2026-05-27T08:16:00.000Z', receivedBy: row.receivedBy || 'Grace Mhando' }
+      if (row.id === 'sale2') return { ...row, subtotal: 194400, discount: 0, tax: 0, total: 194400, paidAt: row.paidAt || '2026-05-26T12:34:00.000Z', receivedBy: row.receivedBy || 'Grace Mhando' }
+      if (row.id === 'sale3') return { ...row, subtotal: 56100, discount: 0, tax: 0, total: 56100, paidAt: row.paidAt || '2026-05-27T07:48:00.000Z', receivedBy: row.receivedBy || 'Neema Joseph' }
+      if (row.id === 'sale4') return { ...row, subtotal: 326000, discount: 0, tax: 0, total: 326000, paidAt: row.paidAt || '2026-05-27T09:03:00.000Z', receivedBy: row.receivedBy || 'Emmanuel Charles' }
+      return row
+    }),
+    inventory: stored.inventory.map((row) => {
+      if (row.id === 'iv1') return { ...row, productId: 'p1', supplierId: 'su1', unitCost: 14300 }
+      if (row.id === 'iv2') return { ...row, product: 'Wireless Mouse', productId: 'p6', supplierId: 'su2', unitCost: 24000, cost: 360000 }
+      if (row.id === 'iv3') return { ...row, productId: 'p7', supplierId: 'su3', unitCost: 52000 }
+      return row
+    }),
+  }
+}
 
 export function AppProvider({ children }) {
   const [data, setData] = useState(() => upgradeStoredData(read(STORE_KEY, createSeedData())))
@@ -52,7 +96,7 @@ export function AppProvider({ children }) {
 
   const companyBranches = (companyId = session.activeCompanyId) => data.branches.filter((row) => row.companyId === companyId)
   const availableCompanies = isSystemAdmin ? [] : data.companies.filter((company) => company.status === 'Active' && memberships.some((row) => row.companyId === company.id))
-  const availableBranches = isSystemAdmin ? [] : companyBranches().filter((branch) => membership?.branchIds.includes(branch.id))
+  const availableBranches = isSystemAdmin ? [] : companyBranches().filter((branch) => branch.status === 'Active' && membership?.branchIds.includes(branch.id))
 
   const can = (permission) => !isSystemAdmin && (membership?.permissions.includes('*') || membership?.permissions.includes(permission))
   const nextProductCode = (additional = []) => nextCode('PRD', [
@@ -275,17 +319,85 @@ export function AppProvider({ children }) {
     notify(`${module} deleted.`, 'warning')
   }
 
-  const completeSale = (sale) => {
+  const pendingQuantities = (branchId = session.activeBranchId) => data.sales
+    .filter((sale) => sale.companyId === session.activeCompanyId && sale.branchId === branchId && sale.status === 'Awaiting Payment')
+    .flatMap((sale) => sale.items || [])
+    .reduce((totals, item) => {
+      totals[item.productId] = (totals[item.productId] || 0) + Number(item.qty || 0)
+      return totals
+    }, {})
+  const availableForSale = (productId) => {
+    const product = data.products.find((row) => row.id === productId && row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId)
+    return product ? Math.max(0, Number(product.stock || 0) - Number(pendingQuantities()[productId] || 0)) : 0
+  }
+  const initiatePayment = (sale) => {
+    if (!sale.items?.length) {
+      notify('Add products before initiating a payment.', 'warning')
+      return false
+    }
+    const unavailable = sale.items.find((item) => !Number.isInteger(Number(item.qty)) || Number(item.qty) <= 0 || Number(item.qty) > availableForSale(item.productId))
+    if (unavailable) {
+      notify(`Available quantity is no longer sufficient for ${unavailable.name}. Review the cart and try again.`, 'warning')
+      return false
+    }
     const invoice = nextCode('INV', data.sales.filter((row) => row.branchId === session.activeBranchId).map((row) => row.invoice))
-    const record = addRecord('sales', { ...sale, invoice, date: new Date().toISOString(), status: 'Paid' }, 'Sale completed', 'POS')
+    const record = {
+      id: newId('sa'),
+      companyId: session.activeCompanyId,
+      branchId: session.activeBranchId,
+      ...sale,
+      invoice,
+      date: new Date().toISOString(),
+      status: 'Awaiting Payment',
+      initiatedBy: account.fullName,
+    }
+    setData((prev) => ({ ...prev, sales: [record, ...prev.sales] }))
+    appendLog(`Payment initiated: ${invoice}`, 'POS')
+    notify(`${invoice} sent to Finance for payment confirmation.`)
+    return record
+  }
+  const confirmPayment = (saleId, paymentDetails) => {
+    const sale = data.sales.find((row) => row.id === saleId && row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId)
+    if (!sale || sale.status !== 'Awaiting Payment') {
+      notify('Only awaiting-payment invoices can be confirmed.', 'warning')
+      return false
+    }
+    const receivedAmount = Number(paymentDetails.receivedAmount)
+    if (!Number.isFinite(receivedAmount) || receivedAmount < Number(sale.total)) {
+      notify('Received amount must cover the total amount due.', 'warning')
+      return false
+    }
+    const unavailable = sale.items.find((item) => {
+      const product = data.products.find((row) => row.id === item.productId && row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId)
+      return !product || Number(product.stock) < Number(item.qty)
+    })
+    if (unavailable) {
+      notify(`Payment cannot be confirmed because stock is insufficient for ${unavailable.name}.`, 'warning')
+      return false
+    }
+    const paidAt = new Date().toISOString()
     setData((prev) => ({
       ...prev,
+      sales: prev.sales.map((row) => row.id === saleId
+        ? {
+          ...row,
+          status: 'Paid',
+          payment: paymentDetails.payment || row.payment,
+          paymentReference: cleanText(paymentDetails.reference),
+          receivedAmount,
+          changeDue: Math.max(0, receivedAmount - Number(row.total)),
+          paidAt,
+          receivedBy: account.fullName,
+        }
+        : row),
       products: prev.products.map((product) => {
         const line = sale.items.find((item) => item.productId === product.id)
         return line && product.branchId === session.activeBranchId ? { ...product, stock: product.stock - line.qty } : product
       }),
     }))
-    return record
+    appendLog(`Payment received: ${sale.invoice}`, 'Finance')
+    notify(`Payment confirmed for ${sale.invoice}. Stock has been updated.`)
+    return true
   }
   const prepareReceipt = (values) => {
     const product = data.products.find((row) => row.id === values.productId && row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId)
@@ -387,15 +499,30 @@ export function AppProvider({ children }) {
   }
 
   const saveMembership = (values) => {
-    const userAccount = data.accounts.find((a) => a.email.toLowerCase() === values.email.toLowerCase())
+    const email = cleanText(values.email).toLowerCase()
+    const fullName = cleanText(values.fullName)
+    const userAccount = data.accounts.find((a) => a.email.toLowerCase() === email)
+    if (!fullName || !email) return { ok: false, message: 'Full name and email are required.' }
+    if (!values.branchIds?.length) return { ok: false, message: 'Assign at least one branch to this user.' }
+    if (userAccount && userAccount.status !== 'Active') return { ok: false, message: 'This account is inactive and cannot be assigned until it is activated.' }
+    if (userAccount && data.users.some((row) => row.companyId === session.activeCompanyId && row.accountId === userAccount.id)) {
+      return { ok: false, message: 'This user already has access to the selected company.' }
+    }
+    if (!userAccount && (!values.password || values.password.length < 8)) {
+      return { ok: false, message: 'Set a password with at least 8 characters for the new user.' }
+    }
+    if (!userAccount && values.password !== values.confirmPassword) {
+      return { ok: false, message: 'Passwords do not match.' }
+    }
     const accountId = userAccount?.id || newId('acc')
     setData((prev) => ({
       ...prev,
-      accounts: userAccount ? prev.accounts : [...prev.accounts, { id: accountId, fullName: values.fullName, email: values.email, password: 'Welcome123!', avatar: '', status: 'Active' }],
+      accounts: userAccount ? prev.accounts : [...prev.accounts, { id: accountId, fullName, email, password: values.password, avatar: '', status: 'Active' }],
       users: [...prev.users, { id: newId('usr'), accountId, companyId: session.activeCompanyId, branchIds: values.branchIds, role: values.role, permissions: values.permissions, status: 'Active' }],
     }))
-    appendLog('User created', 'Users')
-    notify('User created. Temporary password: Welcome123!')
+    appendLog(userAccount ? 'User assigned' : 'User created', 'Users')
+    notify(userAccount ? 'Existing user assigned to this company.' : 'User account created and assigned.')
+    return { ok: true }
   }
 
   const updateMembership = (id, values) => {
@@ -414,24 +541,114 @@ export function AppProvider({ children }) {
     notify('Settings saved.')
   }
 
-  const addBranch = (values) => {
-    const id = newId('br')
+  const resolveBranchValues = (values, excludeId = null) => {
+    const name = cleanText(values.name)
+    const address = cleanText(values.address)
+    const phone = cleanText(values.phone)
     const managerMembership = data.users.find((row) => row.id === values.managerMembershipId && row.companyId === session.activeCompanyId)
     const managerAccount = data.accounts.find((row) => row.id === managerMembership?.accountId)
+    if (!name || !address || !phone) return { error: 'Branch name, address and phone are required.' }
+    if (!managerMembership || managerMembership.status !== 'Active' || !managerAccount) return { error: 'Select an active company user as branch manager.' }
+    if (data.branches.some((row) =>
+      row.companyId === session.activeCompanyId
+      && row.id !== excludeId
+      && comparableText(row.name) === comparableText(name))) {
+      return { error: `A branch named "${name}" already exists in this company.` }
+    }
+    return { name, address, phone, status: values.status || 'Active', managerMembership, managerAccount }
+  }
+
+  const addBranch = (values) => {
+    const branchValues = resolveBranchValues(values)
+    if (branchValues.error) {
+      notify(branchValues.error, 'warning')
+      return false
+    }
+    const id = newId('br')
     const branch = {
       id, companyId: session.activeCompanyId, code: nextBranchCode(session.activeCompanyId),
-      name: values.name, address: values.address, phone: values.phone, status: values.status,
-      managerId: managerMembership?.accountId || '', manager: managerAccount?.fullName || '',
+      name: branchValues.name, address: branchValues.address, phone: branchValues.phone, status: branchValues.status,
+      managerId: branchValues.managerMembership.accountId, manager: branchValues.managerAccount.fullName,
     }
     setData((prev) => ({
       ...prev,
       branches: [...prev.branches, branch],
-      users: prev.users.map((user) => user.id === managerMembership?.id && !user.branchIds.includes(id)
+      users: prev.users.map((user) => user.id === branchValues.managerMembership.id && !user.branchIds.includes(id)
         ? { ...user, branchIds: [...user.branchIds, id] }
         : user),
     }))
     appendLog('Branch created', 'Branches')
     notify('Branch created.')
+    return true
+  }
+
+  const updateBranch = (id, values) => {
+    const branch = data.branches.find((row) => row.id === id && row.companyId === session.activeCompanyId)
+    if (!branch) {
+      notify('Branch could not be found.', 'warning')
+      return false
+    }
+    const branchValues = resolveBranchValues(values, id)
+    if (branchValues.error) {
+      notify(branchValues.error, 'warning')
+      return false
+    }
+    if (id === session.activeBranchId && branchValues.status !== 'Active') {
+      notify('Switch to another branch before making the selected branch inactive.', 'warning')
+      return false
+    }
+    setData((prev) => ({
+      ...prev,
+      branches: prev.branches.map((row) => row.id === id
+        ? {
+          ...row,
+          name: branchValues.name,
+          address: branchValues.address,
+          phone: branchValues.phone,
+          status: branchValues.status,
+          managerId: branchValues.managerMembership.accountId,
+          manager: branchValues.managerAccount.fullName,
+        }
+        : row),
+      users: prev.users.map((user) => user.id === branchValues.managerMembership.id && !user.branchIds.includes(id)
+        ? { ...user, branchIds: [...user.branchIds, id] }
+        : user),
+    }))
+    appendLog('Branch updated', 'Branches')
+    notify('Branch updated.')
+    return true
+  }
+
+  const deleteBranch = (id) => {
+    const branch = data.branches.find((row) => row.id === id && row.companyId === session.activeCompanyId)
+    if (!branch) {
+      notify('Branch could not be found.', 'warning')
+      return false
+    }
+    if (companyBranches().length === 1) {
+      notify('The only branch in a company cannot be deleted.', 'warning')
+      return false
+    }
+    if (id === session.activeBranchId) {
+      notify('Switch to another branch before deleting the selected branch.', 'warning')
+      return false
+    }
+    const restrictedCollections = ['products', 'inventory', 'sales', 'customers', 'suppliers']
+    if (restrictedCollections.some((collection) => data[collection].some((row) => row.companyId === session.activeCompanyId && row.branchId === id))) {
+      notify('This branch contains operational records. Set it inactive instead of deleting it.', 'warning')
+      return false
+    }
+    setData((prev) => ({
+      ...prev,
+      branches: prev.branches.filter((row) => row.id !== id),
+      users: prev.users.map((user) => user.companyId === session.activeCompanyId && user.branchIds.includes(id)
+        ? { ...user, branchIds: user.branchIds.filter((branchId) => branchId !== id) }
+        : user),
+      logs: prev.logs.filter((row) => !(row.companyId === session.activeCompanyId && row.branchId === id)),
+    }))
+    appendLog(`Branch deleted: ${branch.name}`, 'Branches')
+    notify('Branch deleted.', 'warning')
+    return true
   }
 
   const toggleCompany = (id) => {
@@ -448,8 +665,8 @@ export function AppProvider({ children }) {
   const value = {
     data, session, setSession, account, memberships, membership, activeCompany, activeBranch, role, isSystemAdmin,
     toasts, availableCompanies, availableBranches, companyBranches, can, login, registerBusiness, logout, switchCompany, switchBranch,
-    scoped, addRecord, addProduct, updateProduct, importProducts, addSupplier, updateSupplier, updateRecord, deleteRecord, completeSale, receiveInventory, importInventory, createCompany, saveMembership, updateMembership,
-    updateCompany, addBranch, toggleCompany, resetDemo, notify, appendLog,
+    scoped, addRecord, addProduct, updateProduct, importProducts, addSupplier, updateSupplier, updateRecord, deleteRecord, pendingQuantities, availableForSale, initiatePayment, confirmPayment, receiveInventory, importInventory, createCompany, saveMembership, updateMembership,
+    updateCompany, addBranch, updateBranch, deleteBranch, toggleCompany, resetDemo, notify, appendLog,
   }
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

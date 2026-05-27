@@ -10,7 +10,8 @@ Multi-company and multi-branch sales management application built with React, Ta
 - Bulk product and inventory import from Excel or CSV files
 - Automatically generated branch, product and invoice codes with optional product barcodes
 - Company-user assignment for branch managers
-- Point of sale with totals, optional tax, discount handling, receipt preview and stock reduction
+- Point of sale invoice initiation with totals, optional tax, discounts and itemized invoice preview
+- Finance / Accountant payment queue with stock reduction only after successful payment confirmation
 - Dashboard charts, PDF/Excel reports, access permissions and platform administration
 
 ## Run Locally
@@ -35,6 +36,7 @@ npm run preview
 | System administrator | `admin@salesmanagement.app` | `Admin123!` |
 | Multi-company company admin / cashier | `emmanuel@axis.co.tz` | `Demo123!` |
 | Single-branch cashier | `cashier@axis.co.tz` | `Demo123!` |
+| Finance / accountant | `finance@axis.co.tz` | `Finance123!` |
 | New company onboarding | `founder@new.co.tz` | `Start123!` |
 
 ## Data Storage

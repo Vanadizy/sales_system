@@ -8,6 +8,7 @@ const demos = [
   ['System administrator', 'admin@salesmanagement.app', 'Admin123!'],
   ['Multi-company admin/cashier', 'emmanuel@axis.co.tz', 'Demo123!'],
   ['Branch cashier', 'cashier@axis.co.tz', 'Demo123!'],
+  ['Finance / accountant', 'finance@axis.co.tz', 'Finance123!'],
   ['New company setup', 'founder@new.co.tz', 'Start123!'],
 ]
 

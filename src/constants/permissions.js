@@ -5,6 +5,10 @@ export const PERMISSIONS = {
     { id: 'pos.discount', label: 'Apply Discount' },
     { id: 'pos.cancel', label: 'Cancel Sale' },
   ],
+  Finance: [
+    { id: 'finance.view', label: 'View Payment Queue' },
+    { id: 'finance.receive', label: 'Receive and Confirm Payments' },
+  ],
   Products: [
     { id: 'products.view', label: 'View Products' },
     { id: 'products.add', label: 'Add Product' },
@@ -47,6 +51,6 @@ export const ALL_PERMISSIONS = Object.values(PERMISSIONS).flat().map(({ id }) =>
 export const MANAGER_PERMISSIONS = ALL_PERMISSIONS.filter((p) => !p.startsWith('users.') && p !== 'settings.manage')
 export const CASHIER_PERMISSIONS = ['dashboard.view', 'pos.use', 'pos.discount', 'products.view', 'customers.view', 'customers.add']
 export const INVENTORY_PERMISSIONS = ['dashboard.view', 'products.view', 'products.add', 'products.edit', 'inventory.view', 'inventory.add', 'inventory.edit', 'suppliers.view']
-export const ACCOUNTANT_PERMISSIONS = ['dashboard.view', 'reports.view', 'reports.pdf', 'reports.excel', 'logs.view']
+export const ACCOUNTANT_PERMISSIONS = ['dashboard.view', 'finance.view', 'finance.receive', 'reports.view', 'reports.pdf', 'reports.excel', 'logs.view']
 
 export const ROLES = ['System Admin', 'Company Admin', 'Branch Manager', 'Inventory Manager', 'Accountant', 'Cashier', 'Viewer/User']

@@ -32,7 +32,7 @@ export default function BranchesPage() {
       <form className="grid gap-4 sm:grid-cols-2" id="branch-form" onSubmit={submit}>
         <FormInput label="Branch name" required value={form?.name || ''} onChange={(event) => setForm({ ...form, name: event.target.value })} />
         <FormInput label="Branch code" value={form?.code || 'Generated automatically'} disabled />
-        <FormInput label="Address / location" required value={form?.address || ''} onChange={(event) => setForm({ ...form, address: event.target.value })} />
+        <FormInput label="Address / location (optional)" value={form?.address || ''} onChange={(event) => setForm({ ...form, address: event.target.value })} />
         <FormInput label="Phone" required value={form?.phone || ''} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
         <Select label="Branch manager" required value={form?.managerMembershipId || ''} onChange={(event) => setForm({ ...form, managerMembershipId: event.target.value })}>{managers.map((manager) => <option key={manager.id} value={manager.id}>{manager.account.fullName} ({manager.role})</option>)}</Select>
         <Select label="Status" value={form?.status || 'Active'} onChange={(event) => setForm({ ...form, status: event.target.value })}><option>Active</option><option>Inactive</option></Select>

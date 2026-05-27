@@ -6,6 +6,7 @@ const STORE_KEY = 'axispos.prototype.v1'
 const SESSION_KEY = 'axispos.session.v1'
 const AppContext = createContext(null)
 const addPermissions = (permissions = [], additions = []) => [...new Set([...permissions, ...additions])]
+const emptySession = { accountId: null, activeCompanyId: null, activeBranchId: null, lastVisitedRoute: '/dashboard' }
 
 const read = (key, fallback) => {
   try {
@@ -16,12 +17,27 @@ const read = (key, fallback) => {
   }
 }
 
+const readSession = () => {
+  try {
+    const saved = sessionStorage.getItem(SESSION_KEY)
+    if (saved) return JSON.parse(saved)
+  } catch {
+    return emptySession
+  }
+  const legacy = read(SESSION_KEY, null)
+  if (legacy) {
+    localStorage.removeItem(SESSION_KEY)
+    return legacy
+  }
+  return emptySession
+}
+
 const upgradeStoredData = (stored) => {
   const accounts = stored.accounts.map((row) => row.systemAdmin && row.email === 'admin@axispos.app'
     ? { ...row, email: 'admin@salesmanagement.app' }
     : row)
   const users = stored.users.map((row) => ['Company Admin', 'Branch Manager', 'Accountant'].includes(row.role)
-    ? { ...row, permissions: addPermissions(row.permissions, ['finance.view', 'finance.receive']) }
+    ? { ...row, permissions: addPermissions(row.permissions, ['finance.view', 'finance.receive', 'finance.return']) }
     : row)
   const hasSampleCompany = stored.companies.some((row) => row.id === 'cmp-axis')
   const financeAccount = accounts.find((row) => row.email === 'finance@axis.co.tz') || {
@@ -74,11 +90,23 @@ const upgradeStoredData = (stored) => {
 
 export function AppProvider({ children }) {
   const [data, setData] = useState(() => upgradeStoredData(read(STORE_KEY, createSeedData())))
-  const [session, setSession] = useState(() => read(SESSION_KEY, { accountId: null, activeCompanyId: null, activeBranchId: null, lastVisitedRoute: '/dashboard' }))
+  const [session, setSession] = useState(readSession)
   const [toasts, setToasts] = useState([])
 
   useEffect(() => localStorage.setItem(STORE_KEY, JSON.stringify(data)), [data])
-  useEffect(() => localStorage.setItem(SESSION_KEY, JSON.stringify(session)), [session])
+  useEffect(() => sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)), [session])
+  useEffect(() => {
+    const synchronizeData = (event) => {
+      if (event.key !== STORE_KEY || !event.newValue) return
+      try {
+        setData(upgradeStoredData(JSON.parse(event.newValue)))
+      } catch {
+        // Ignore corrupt external writes and retain the valid in-memory data.
+      }
+    }
+    window.addEventListener('storage', synchronizeData)
+    return () => window.removeEventListener('storage', synchronizeData)
+  }, [])
 
   const account = data.accounts.find((row) => row.id === session.accountId)
   const isSystemAdmin = Boolean(account?.systemAdmin)
@@ -230,6 +258,10 @@ export function AppProvider({ children }) {
   }
   const updateProduct = (id, values) => {
     const current = data.products.find((row) => row.id === id && row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId)
+    if (role === 'Accountant' && Number(values.price) !== Number(current?.price)) {
+      notify('Finance users cannot change product selling prices.', 'warning')
+      return false
+    }
     const product = normalizeProduct({ ...values, cost: current?.cost ?? values.cost, stock: current?.stock ?? values.stock })
     const error = validateProduct(product, id)
     if (error) {
@@ -340,18 +372,28 @@ export function AppProvider({ children }) {
       notify(`Available quantity is no longer sufficient for ${unavailable.name}. Review the cart and try again.`, 'warning')
       return false
     }
-    const invoice = nextCode('INV', data.sales.filter((row) => row.branchId === session.activeBranchId).map((row) => row.invoice))
+    const invoice = nextCode('INV', data.sales.filter((row) => row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId).map((row) => row.invoice))
+    const { returnedSaleId, ...saleValues } = sale
+    const returnedInvoice = returnedSaleId
+      ? data.sales.find((row) => row.id === returnedSaleId && row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId && row.status === 'Returned to POS')
+      : null
     const record = {
       id: newId('sa'),
       companyId: session.activeCompanyId,
       branchId: session.activeBranchId,
-      ...sale,
+      ...saleValues,
       invoice,
       date: new Date().toISOString(),
       status: 'Awaiting Payment',
       initiatedBy: account.fullName,
+      sourceInvoice: returnedInvoice?.invoice,
     }
-    setData((prev) => ({ ...prev, sales: [record, ...prev.sales] }))
+    setData((prev) => ({
+      ...prev,
+      sales: [record, ...prev.sales.map((row) => returnedInvoice && row.id === returnedInvoice.id
+        ? { ...row, status: 'Replaced', replacementInvoice: invoice, replacedAt: record.date }
+        : row)],
+    }))
     appendLog(`Payment initiated: ${invoice}`, 'POS')
     notify(`${invoice} sent to Finance for payment confirmation.`)
     return record
@@ -376,6 +418,34 @@ export function AppProvider({ children }) {
       return false
     }
     const paidAt = new Date().toISOString()
+    const customerName = cleanText(sale.customer)
+    const customerPhone = cleanText(sale.customerPhone)
+    const shouldTrackCustomer = customerName && comparableText(customerName) !== comparableText('Walk-in Customer')
+    const updateCustomerPurchases = (customers) => {
+      if (!shouldTrackCustomer) return customers
+      const customer = customers.find((row) =>
+        row.companyId === session.activeCompanyId
+        && row.branchId === session.activeBranchId
+        && comparableText(row.name) === comparableText(customerName))
+      if (!customer) {
+        return [{
+          id: newId('cu'),
+          companyId: session.activeCompanyId,
+          branchId: session.activeBranchId,
+          name: customerName,
+          phone: customerPhone,
+          email: '',
+          spent: Number(sale.total || 0),
+        }, ...customers]
+      }
+      return customers.map((row) => row.id === customer.id
+        ? {
+          ...row,
+          phone: customerPhone || row.phone || '',
+          spent: Number(row.spent || 0) + Number(sale.total || 0),
+        }
+        : row)
+    }
     setData((prev) => ({
       ...prev,
       sales: prev.sales.map((row) => row.id === saleId
@@ -394,9 +464,33 @@ export function AppProvider({ children }) {
         const line = sale.items.find((item) => item.productId === product.id)
         return line && product.branchId === session.activeBranchId ? { ...product, stock: product.stock - line.qty } : product
       }),
+      customers: updateCustomerPurchases(prev.customers),
     }))
     appendLog(`Payment received: ${sale.invoice}`, 'Finance')
     notify(`Payment confirmed for ${sale.invoice}. Stock has been updated.`)
+    return true
+  }
+  const returnPaymentToPOS = (saleId, reason) => {
+    const sale = data.sales.find((row) => row.id === saleId && row.companyId === session.activeCompanyId && row.branchId === session.activeBranchId)
+    if (!sale || sale.status !== 'Awaiting Payment') {
+      notify('Only unpaid invoices awaiting payment can be returned to POS.', 'warning')
+      return false
+    }
+    const returnedAt = new Date().toISOString()
+    setData((prev) => ({
+      ...prev,
+      sales: prev.sales.map((row) => row.id === saleId
+        ? {
+          ...row,
+          status: 'Returned to POS',
+          returnedAt,
+          returnedBy: account.fullName,
+          returnReason: cleanText(reason) || 'Payment was not received.',
+        }
+        : row),
+    }))
+    appendLog(`Invoice returned to POS: ${sale.invoice}`, 'Finance')
+    notify(`${sale.invoice} returned to POS. Reserved products are available again.`)
     return true
   }
   const prepareReceipt = (values) => {
@@ -547,7 +641,7 @@ export function AppProvider({ children }) {
     const phone = cleanText(values.phone)
     const managerMembership = data.users.find((row) => row.id === values.managerMembershipId && row.companyId === session.activeCompanyId)
     const managerAccount = data.accounts.find((row) => row.id === managerMembership?.accountId)
-    if (!name || !address || !phone) return { error: 'Branch name, address and phone are required.' }
+    if (!name || !phone) return { error: 'Branch name and phone are required.' }
     if (!managerMembership || managerMembership.status !== 'Active' || !managerAccount) return { error: 'Select an active company user as branch manager.' }
     if (data.branches.some((row) =>
       row.companyId === session.activeCompanyId
@@ -665,7 +759,7 @@ export function AppProvider({ children }) {
   const value = {
     data, session, setSession, account, memberships, membership, activeCompany, activeBranch, role, isSystemAdmin,
     toasts, availableCompanies, availableBranches, companyBranches, can, login, registerBusiness, logout, switchCompany, switchBranch,
-    scoped, addRecord, addProduct, updateProduct, importProducts, addSupplier, updateSupplier, updateRecord, deleteRecord, pendingQuantities, availableForSale, initiatePayment, confirmPayment, receiveInventory, importInventory, createCompany, saveMembership, updateMembership,
+    scoped, addRecord, addProduct, updateProduct, importProducts, addSupplier, updateSupplier, updateRecord, deleteRecord, pendingQuantities, availableForSale, initiatePayment, confirmPayment, returnPaymentToPOS, receiveInventory, importInventory, createCompany, saveMembership, updateMembership,
     updateCompany, addBranch, updateBranch, deleteBranch, toggleCompany, resetDemo, notify, appendLog,
   }
 

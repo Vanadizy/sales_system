@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import ReceiptPreview from '../../components/ReceiptPreview'
 import { Badge, DataTable, FormInput, Modal, PageHeader, PermissionGate, Tabs } from '../../components/UI'
-import { exportExcel, exportPdf } from '../../services/exportService'
+import { exportInvoiceExcel, exportInvoicePdf, printInvoice } from '../../services/exportService'
 import { dateTime, money } from '../../utils/format'
 
 const reportTypes = ['Daily sales', 'Weekly sales', 'Monthly sales', 'Yearly sales', 'Inventory', 'Stock movement', 'Low stock', 'Customers', 'Suppliers', 'User activity']
@@ -11,7 +11,7 @@ const paidDate = (sale) => sale.paidAt || sale.date
 const today = () => new Date().toISOString().slice(0, 10)
 
 export default function ReportsPage() {
-  const { scoped, activeCompany, activeBranch, account, data, appendLog } = useApp()
+  const { scoped, activeCompany, activeBranch, data, appendLog } = useApp()
   const [selected, setSelected] = useState('Daily sales')
   const [selectedDate, setSelectedDate] = useState(today())
   const [invoice, setInvoice] = useState(null)
@@ -30,7 +30,8 @@ export default function ReportsPage() {
         columns: ['Invoice', 'Payment date', 'Customer', 'Payment', 'Status', 'Total'],
         records,
         table: [
-          { key: 'invoice', label: 'Invoice', render: (row) => <button className="inline-flex items-center gap-1 font-semibold text-brand-700 hover:underline" onClick={() => setInvoice(row)}>{row.invoice}<Eye size={14} /></button> },
+          { key: 'view', label: 'View', render: (row) => <button className="btn-secondary px-3 py-1.5" onClick={() => setInvoice(row)}><Eye size={14} />View</button> },
+          { key: 'invoice', label: 'Invoice' },
           { key: 'date', label: 'Payment date', render: (row) => dateTime(paidDate(row)) },
           { key: 'customer', label: 'Customer' },
           { key: 'payment', label: 'Payment' },
@@ -49,19 +50,35 @@ export default function ReportsPage() {
     if (selected === 'Suppliers') return simple(scoped('suppliers'), [['name', 'Supplier'], ['phone', 'Phone'], ['category', 'Category'], ['orders', 'Orders']])
     return simple(scoped('logs'), [['date', 'Date'], ['user', 'User'], ['action', 'Action'], ['module', 'Module'], ['status', 'Status']])
   }, [selected, selectedDate, currency, scoped])
-  const pdf = () => { exportPdf({ company: activeCompany, branch: activeBranch, account, title: selected, columns: report.columns, rows: report.exportRows.map((row) => Object.values(row)) }); appendLog('Report exported to PDF', 'Reports') }
-  const excel = () => { exportExcel({ title: selected, rows: report.exportRows, company: activeCompany, branch: activeBranch }); appendLog('Report exported to Excel', 'Reports') }
+  const invoicePdf = (row) => {
+    exportInvoicePdf({ company: { ...activeCompany, currency }, branch: activeBranch, invoice: row })
+    appendLog(`Invoice PDF exported: ${row.invoice}`, 'Reports')
+  }
+  const invoiceExcel = (row) => {
+    exportInvoiceExcel({ company: activeCompany, branch: activeBranch, invoice: row })
+    appendLog(`Invoice Excel exported: ${row.invoice}`, 'Reports')
+  }
+  const columns = selected.includes('sales')
+    ? [...report.table, {
+      key: 'downloads',
+      label: 'Downloads',
+      render: (row) => <div className="flex gap-2">
+        <PermissionGate permission="reports.pdf"><button className="btn-secondary px-3 py-1.5" onClick={() => invoicePdf(row)}><FileText size={14} />PDF</button></PermissionGate>
+        <PermissionGate permission="reports.excel"><button className="btn-secondary px-3 py-1.5" onClick={() => invoiceExcel(row)}><FileSpreadsheet size={14} />Excel</button></PermissionGate>
+      </div>,
+    }]
+    : report.table
 
   return <>
-    <PageHeader title="Reports" description={`Paid transaction reports scoped to ${activeCompany.name} / ${activeBranch.name}.`} action={<div className="flex gap-2"><PermissionGate permission="reports.pdf"><button className="btn-secondary" onClick={pdf}><FileText size={17} />PDF</button></PermissionGate><PermissionGate permission="reports.excel"><button className="btn-primary" onClick={excel}><FileSpreadsheet size={17} />Excel</button></PermissionGate></div>} />
+    <PageHeader title="Reports" description={`Paid transaction reports scoped to ${activeCompany.name} / ${activeBranch.name}. Open an invoice to print or download it.`} />
     <div className="mb-5"><Tabs tabs={reportTypes} selected={selected} onChange={setSelected} /></div>
     {selected.includes('sales') && <div className="card mb-5 max-w-sm"><FormInput label={selected === 'Daily sales' ? 'Select sales day' : selected === 'Weekly sales' ? 'Week ending date' : selected === 'Monthly sales' ? 'Select a date in month' : 'Select a date in year'} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /></div>}
     <section className="card">
-      <div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold">{selected} report</h2><p className="text-sm text-slate-500">{report.records.length} paid or scoped records available{selected.includes('sales') ? ' / click an invoice to see each item sold' : ''}</p></div><Download className="text-slate-400" /></div>
-      <DataTable rows={report.records} columns={report.table} mobileTitle={(row) => row.name || row.invoice || row.action} />
+      <div className="mb-5"><h2 className="font-semibold">{selected} report</h2><p className="text-sm text-slate-500">{report.records.length} paid or scoped records available{selected.includes('sales') ? ' / open an invoice to see each item sold' : ''}</p></div>
+      <DataTable rows={report.records} columns={columns} showFirstOnMobile={selected.includes('sales')} mobileTitle={(row) => row.name || row.invoice || row.action} />
     </section>
-    <Modal open={Boolean(invoice)} title={`Invoice details - ${invoice?.invoice || ''}`} onClose={() => setInvoice(null)} footer={<><button className="btn-secondary" onClick={() => window.print()}><Printer size={16} />Print invoice</button><button className="btn-primary" onClick={() => setInvoice(null)}>Close</button></>}>
-      {invoice && <ReceiptPreview company={{ ...activeCompany, currency }} branch={activeBranch} invoice={invoice.invoice} status={invoice.status} date={paidDate(invoice)} customer={invoice.customer} items={invoice.items} subtotal={invoice.subtotal ?? invoice.items.reduce((sum, item) => sum + item.qty * item.price, 0)} discount={invoice.discount} tax={invoice.tax} total={invoice.total} payment={invoice.payment} receivedBy={invoice.receivedBy} paymentReference={invoice.paymentReference} />}
+    <Modal open={Boolean(invoice)} title={`Invoice details - ${invoice?.invoice || ''}`} onClose={() => setInvoice(null)} footer={<><PermissionGate permission="reports.excel"><button className="btn-secondary" onClick={() => invoiceExcel(invoice)}><FileSpreadsheet size={16} />Excel</button></PermissionGate><PermissionGate permission="reports.pdf"><button className="btn-secondary" onClick={() => printInvoice('reports-viewed-invoice')}><Printer size={16} />Print invoice</button><button className="btn-secondary" onClick={() => invoicePdf(invoice)}><Download size={16} />Download PDF</button></PermissionGate><button className="btn-primary" onClick={() => setInvoice(null)}>Close</button></>}>
+      {invoice && <ReceiptPreview printId="reports-viewed-invoice" company={{ ...activeCompany, currency }} branch={activeBranch} invoice={invoice.invoice} status={invoice.status} date={paidDate(invoice)} customer={invoice.customer} customerPhone={invoice.customerPhone} items={invoice.items} subtotal={invoice.subtotal ?? invoice.items.reduce((sum, item) => sum + item.qty * item.price, 0)} discount={invoice.discount} tax={invoice.tax} total={invoice.total} payment={invoice.payment} receivedBy={invoice.receivedBy} paymentReference={invoice.paymentReference} />}
     </Modal>
   </>
 }

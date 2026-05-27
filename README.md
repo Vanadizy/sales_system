@@ -12,6 +12,9 @@ Multi-company and multi-branch sales management application built with React, Ta
 - Company-user assignment for branch managers
 - Point of sale invoice initiation with totals, optional tax, discounts and itemized invoice preview
 - Finance / Accountant payment queue with stock reduction only after successful payment confirmation
+- Immediate POS and Finance synchronization across separately signed-in browser tabs
+- Return-to-POS handling for unpaid invoices, with product availability released for correction
+- Template-style PDF and Excel downloads for individual sales invoices
 - Dashboard charts, PDF/Excel reports, access permissions and platform administration
 
 ## Run Locally
@@ -41,7 +44,7 @@ npm run preview
 
 ## Data Storage
 
-Records and current-session selections are persisted in browser local storage. Company-scoped records carry `companyId`, and operational records additionally carry `branchId`.
+Records are persisted in browser local storage and the signed-in session is isolated per browser tab. Company-scoped records carry `companyId`, and operational records additionally carry `branchId`.
 
 ## Deployment
 

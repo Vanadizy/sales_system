@@ -1,6 +1,10 @@
-import jsPDF from 'jspdf'
+import { jsPDF } from 'jspdf'
 import * as XLSX from 'xlsx'
 import { dateTime } from '../utils/format'
+
+const filePart = (value) => String(value || '').toLowerCase().replaceAll(' ', '-')
+const invoiceAmount = (value, currency = 'TZS') =>
+  `${currency} ${new Intl.NumberFormat('en-TZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0))}`
 
 export function exportPdf({ company, branch, account, title, columns, rows }) {
   const doc = new jsPDF()
@@ -22,12 +26,188 @@ export function exportPdf({ company, branch, account, title, columns, rows }) {
     y += 7
     doc.text(row.map((value) => String(value).slice(0, 30)).join(' | '), 14, y)
   })
-  doc.save(`${title.toLowerCase().replaceAll(' ', '-')}-${branch.code}.pdf`)
+  doc.save(`${filePart(title)}-${branch.code}.pdf`)
 }
 
 export function exportExcel({ title, rows, company, branch }) {
   const sheet = XLSX.utils.json_to_sheet(rows)
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, sheet, title.slice(0, 31))
-  XLSX.writeFile(workbook, `${title.toLowerCase().replaceAll(' ', '-')}-${company.name}-${branch.code}.xlsx`)
+  XLSX.writeFile(workbook, `${filePart(title)}-${company.name}-${branch.code}.xlsx`)
+}
+
+export function buildInvoicePdf({ company, branch, invoice }) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const currency = company.currency || 'TZS'
+  const blue = [55, 131, 242]
+  const dark = [33, 37, 41]
+  const muted = [108, 117, 125]
+  const pageWidth = 210
+  const right = 195
+
+  const divider = (y, color = blue, width = 0.5) => {
+    doc.setDrawColor(...color)
+    doc.setLineWidth(width)
+    doc.line(15, y, right, y)
+  }
+  const tableHeader = (y) => {
+    divider(y)
+    doc.setTextColor(...dark)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text('DESCRIPTION', 17, y + 6)
+    doc.text('QTY', 118, y + 6, { align: 'right' })
+    doc.text('PRICE', 155, y + 6, { align: 'right' })
+    doc.text('TOTAL', right - 2, y + 6, { align: 'right' })
+    divider(y + 10)
+    return y + 16
+  }
+
+  doc.setTextColor(...dark)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(17)
+  doc.text('INVOICE', pageWidth / 2, 21, { align: 'center' })
+
+  if (company.logo?.startsWith('data:image')) {
+    try { doc.addImage(company.logo, 'PNG', 15, 32, 18, 18) } catch { /* optional company image */ }
+  }
+  const companyY = company.logo?.startsWith('data:image') ? 56 : 36
+  doc.setFontSize(12)
+  doc.text(doc.splitTextToSize(String(company.name || '').toUpperCase(), 65), 15, companyY)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...muted)
+  doc.text(doc.splitTextToSize(`Address: ${company.address || '-'}`, 63), 15, companyY + 12)
+  doc.text(`Phone: ${company.phone || '-'}`, 15, companyY + 23)
+  doc.text(`Email: ${company.email || '-'}`, 15, companyY + 29)
+
+  doc.setTextColor(...dark)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Client:', 107, 36)
+  doc.setFont('helvetica', 'normal')
+  doc.text(doc.splitTextToSize(invoice.customer || 'Walk-in Customer', 72), right, 36, { align: 'right' })
+  if (invoice.customerPhone) doc.text(`Phone: ${invoice.customerPhone}`, right, 42, { align: 'right' })
+  doc.setFont('helvetica', 'bold')
+  doc.text('Branch:', 107, 49)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`${branch.name} / ${branch.code}`, right, 49, { align: 'right' })
+
+  divider(75, blue, 0.8)
+  doc.setTextColor(...muted)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.text('INVOICE', 15, 93)
+  doc.setFontSize(9)
+  doc.text(`#${invoice.invoice}`, right, 89, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Date: ${dateTime(invoice.paidAt || invoice.date)}`, right, 95, { align: 'right' })
+  doc.text(`Status: ${invoice.status}`, right, 101, { align: 'right' })
+
+  let y = tableHeader(111)
+  doc.setFontSize(9)
+  invoice.items.forEach((item, index) => {
+    if (y > 250) {
+      doc.addPage()
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(13)
+      doc.setTextColor(...dark)
+      doc.text(`INVOICE #${invoice.invoice}`, 15, 18)
+      y = tableHeader(27)
+    }
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...dark)
+    doc.text(`#${String(index + 1).padStart(2, '0')} ${item.name}`, 17, y)
+    doc.text(String(item.qty), 118, y, { align: 'right' })
+    doc.text(invoiceAmount(item.price, currency), 155, y, { align: 'right' })
+    doc.text(invoiceAmount(item.price * item.qty, currency), right - 2, y, { align: 'right' })
+    doc.setDrawColor(220, 223, 228)
+    doc.setLineWidth(0.25)
+    doc.line(15, y + 5, right, y + 5)
+    y += 11
+  })
+
+  if (y > 244) {
+    doc.addPage()
+    y = 30
+  } else {
+    y += 9
+  }
+  const totalX = 147
+  const valueX = right - 2
+  doc.setFontSize(9)
+  doc.setTextColor(...muted)
+  doc.text('SUBTOTAL', totalX, y)
+  doc.text(invoiceAmount(invoice.subtotal, currency), valueX, y, { align: 'right' })
+  doc.line(143, y + 4, right, y + 4)
+  y += 10
+  doc.text('TAX', totalX, y)
+  doc.text(invoiceAmount(invoice.tax, currency), valueX, y, { align: 'right' })
+  doc.setDrawColor(...dark)
+  doc.setLineWidth(0.6)
+  doc.line(143, y + 5, right, y + 5)
+  y += 13
+  doc.setTextColor(...dark)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.text('TOTAL', totalX, y)
+  doc.text(invoiceAmount(invoice.total, currency), valueX, y, { align: 'right' })
+
+  const footerY = Math.min(Math.max(y + 21, 198), 272)
+  divider(footerY, dark, 0.35)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.text(company.receiptFooter || `Thank you for choosing ${company.name}.`, pageWidth / 2, footerY + 8, { align: 'center' })
+  doc.setFont('helvetica', 'bold')
+  doc.text(String(company.name || '').toUpperCase(), pageWidth / 2, footerY + 14, { align: 'center' })
+  return doc
+}
+
+export function exportInvoicePdf(values) {
+  const doc = buildInvoicePdf(values)
+  doc.save(`invoice-${filePart(values.invoice.invoice)}.pdf`)
+}
+
+export function printInvoice(printId) {
+  const target = document.getElementById(printId)
+  if (!target) return false
+  document.getElementById('invoice-print-root')?.remove()
+  const printRoot = document.createElement('div')
+  printRoot.id = 'invoice-print-root'
+  printRoot.className = 'invoice-print-root'
+  printRoot.appendChild(target.cloneNode(true))
+  document.body.appendChild(printRoot)
+  document.body.classList.add('printing-invoice')
+  const cleanup = () => {
+    printRoot.remove()
+    document.body.classList.remove('printing-invoice')
+  }
+  window.addEventListener('afterprint', cleanup, { once: true })
+  window.print()
+  return true
+}
+
+export function exportInvoiceExcel({ company, branch, invoice }) {
+  const rows = [
+    ['INVOICE', invoice.invoice],
+    ['Company', company.name],
+    ['Branch', `${branch.name} / ${branch.code}`],
+    ['Customer', invoice.customer || 'Walk-in Customer'],
+    ['Customer phone', invoice.customerPhone || '-'],
+    ['Status', invoice.status],
+    ['Payment date', invoice.paidAt ? dateTime(invoice.paidAt) : '-'],
+    ['Payment method', invoice.payment || '-'],
+    [],
+    ['Description', 'Quantity', 'Unit price', 'Line total'],
+    ...invoice.items.map((item) => [item.name, item.qty, item.price, item.price * item.qty]),
+    [],
+    ['', '', 'Subtotal', invoice.subtotal],
+    ['', '', 'Discount', invoice.discount || 0],
+    ['', '', 'Tax', invoice.tax || 0],
+    ['', '', 'Total', invoice.total],
+  ]
+  const sheet = XLSX.utils.aoa_to_sheet(rows)
+  sheet['!cols'] = [{ wch: 36 }, { wch: 14 }, { wch: 18 }, { wch: 18 }]
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Invoice')
+  XLSX.writeFile(workbook, `invoice-${filePart(invoice.invoice)}-${branch.code}.xlsx`)
 }

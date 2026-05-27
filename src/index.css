@@ -16,3 +16,34 @@
   .btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800; }
   .pill { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium; }
 }
+
+.invoice-print-root {
+  display: none;
+}
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+
+  body.printing-invoice {
+    background: #fff !important;
+  }
+
+  body.printing-invoice > *:not(.invoice-print-root) {
+    display: none !important;
+  }
+
+  body.printing-invoice .invoice-print-root {
+    display: block !important;
+  }
+
+  body.printing-invoice .invoice-document {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #0f172a !important;
+  }
+}

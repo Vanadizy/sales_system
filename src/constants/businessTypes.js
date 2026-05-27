@@ -29,6 +29,6 @@ export const BUSINESS_TYPE_GROUPS = [
   },
   {
     label: 'Flexible Operations',
-    options: ['Multi-category / All Products', 'Other Business'],
+    options: ['General Business / All Products', 'Multi-category / All Products', 'Other Business'],
   },
 ]

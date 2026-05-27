@@ -48,11 +48,11 @@ export function EmptyState({ title = 'No records found', message = 'Create a rec
   return <div className="py-14 text-center"><div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800"><Info /></div><h3 className="font-semibold">{title}</h3><p className="mt-1 text-sm text-slate-500">{message}</p></div>
 }
 
-export function DataTable({ columns, rows, empty, mobileTitle }) {
+export function DataTable({ columns, rows, empty, mobileTitle, showFirstOnMobile = false }) {
   if (!rows.length) return <EmptyState {...empty} />
   return <>
     <div className="hidden overflow-x-auto md:block"><table className="w-full text-left text-sm"><thead><tr className="border-b text-xs uppercase tracking-wide text-slate-500">{columns.map((col) => <th className="px-4 py-3 font-semibold" key={col.key}>{col.label}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-b last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50">{columns.map((col) => <td className="px-4 py-3" key={col.key}>{col.render ? col.render(row) : row[col.key]}</td>)}</tr>)}</tbody></table></div>
-    <div className="grid gap-3 md:hidden">{rows.map((row) => <div className="rounded-xl border p-4" key={row.id}><p className="mb-3 font-semibold">{mobileTitle ? mobileTitle(row) : row.name}</p>{columns.slice(1).map((col) => <div className="mb-2 flex justify-between gap-4 text-sm" key={col.key}><span className="text-slate-500">{col.label}</span><span className="text-right">{col.render ? col.render(row) : row[col.key]}</span></div>)}</div>)}</div>
+    <div className="grid gap-3 md:hidden">{rows.map((row) => <div className="rounded-xl border p-4" key={row.id}><p className="mb-3 font-semibold">{mobileTitle ? mobileTitle(row) : row.name}</p>{columns.slice(showFirstOnMobile ? 0 : 1).map((col) => <div className="mb-2 flex justify-between gap-4 text-sm" key={col.key}><span className="text-slate-500">{col.label}</span><span className="text-right">{col.render ? col.render(row) : row[col.key]}</span></div>)}</div>)}</div>
   </>
 }
 
@@ -71,12 +71,12 @@ export function CheckboxGroup({ sections, selected, onChange }) {
 }
 
 export function Tabs({ tabs, selected, onChange }) {
-  return <div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 dark:bg-slate-800">{tabs.map((tab) => <button key={tab} onClick={() => onChange(tab)} className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium ${selected === tab ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100' : 'text-slate-500'}`}>{tab}</button>)}</div>
+  return <div role="tablist" className="flex snap-x gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1 dark:bg-slate-800">{tabs.map((tab) => <button role="tab" aria-selected={selected === tab} key={tab} onClick={() => onChange(tab)} className={`shrink-0 snap-start whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium ${selected === tab ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100' : 'text-slate-500'}`}>{tab}</button>)}</div>
 }
 
 export function Toasts() {
   const { toasts } = useApp()
-  return <div className="fixed bottom-5 right-5 z-[60] grid gap-2">{toasts.map((toast) => <div key={toast.id} className="flex min-w-64 items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm shadow-lg dark:bg-slate-900">{toast.type === 'warning' ? <AlertTriangle className="text-amber-500" size={18} /> : <CheckCircle2 className="text-emerald-500" size={18} />}{toast.message}</div>)}</div>
+  return <div className="fixed right-5 top-5 z-[60] grid gap-2">{toasts.map((toast) => <div key={toast.id} className="flex min-w-64 max-w-sm items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm shadow-lg dark:bg-slate-900">{toast.type === 'warning' ? <AlertTriangle className="text-amber-500" size={18} /> : <CheckCircle2 className="text-emerald-500" size={18} />}{toast.message}</div>)}</div>
 }
 
 export function LoadingSpinner() {
